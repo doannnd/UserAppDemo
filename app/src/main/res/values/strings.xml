@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">User App Demo</string>
+    <string name="uber_text">U B E R</string>
+    <string name="partner_text_view">PARTNER</string>
+    <string name="user_app_text_view">LOOKING FOR THE DRIVER APP?</string>
+    <string name="sign_up_button_text">REGISTER</string>
+    <string name="cancel_button_text">CANCEL</string>
+    <string name="sign_in_button_text">SIGN IN</string>
+    <string name="hint_email">email</string>
+    <string name="hint_password">password</string>
+    <string name="hint_name">name</string>
+    <string name="hint_phone">phone</string>
+    <string name="register_dialog_title">REGISTER</string>
+    <string name="login_dialog_title">SIGN IN</string>
+    <string name="register_dialog_message">Please use email to register</string>
+    <string name="login_dialog_message">Please user email to login</string>
+    <string name="title_activity_welcome">Map</string>
+    <string name="title_activity_home">HomeActivity</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">Android Studio</string>
+    <string name="nav_header_subtitle">android.studio@android.com</string>
+    <string name="nav_header_desc">Navigation header</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_gallery">Gallery</string>
+    <string name="menu_slideshow">Slideshow</string>
+    <string name="menu_tools">Tools</string>
+    <string name="menu_share">Share</string>
+    <string name="menu_send">Send</string>
+</resources>
