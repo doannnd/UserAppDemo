@@ -19,6 +19,8 @@ import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
+import android.widget.Button;
+import android.widget.ImageView;
 
 import com.firebase.geofire.GeoFire;
 import com.firebase.geofire.GeoLocation;
@@ -45,6 +47,7 @@ import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
+import com.nguyendinhdoan.userappdemo.helper.CustomInforWindow;
 
 import java.util.List;
 
@@ -64,6 +67,10 @@ public class HomeActivity extends AppCompatActivity
     private GeoFire geoFire;
 
     private Marker mUserMarker;
+
+    ImageView imgExpandable;
+    private BottomSheetRiderFragment mBottomSheet;
+    private Button btnPickupRequest;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,7 +99,51 @@ public class HomeActivity extends AppCompatActivity
         users = FirebaseDatabase.getInstance().getReference("usersLocation");
         geoFire = new GeoFire(users);
 
+        // init view
+        imgExpandable = findViewById(R.id.imgExpandable);
+        mBottomSheet = BottomSheetRiderFragment.newInstance("Rider bottom sheet");
+        imgExpandable.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mBottomSheet.show(getSupportFragmentManager(), mBottomSheet.getTag());
+            }
+        });
+
+        btnPickupRequest = findViewById(R.id.btnPickupRequest);
+        btnPickupRequest.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestPickupHere(FirebaseAuth.getInstance().getCurrentUser().getUid());
+            }
+        });
+
         setupLocation();
+    }
+
+    private void requestPickupHere(String uid) {
+        DatabaseReference dbRequest = FirebaseDatabase.getInstance().getReference("PickupRequest");
+        GeoFire geoFire = new GeoFire(dbRequest);
+
+        geoFire.setLocation(uid, new GeoLocation(mLastLocation.getLatitude(), mLastLocation.getLongitude()), new GeoFire.CompletionListener() {
+            @Override
+            public void onComplete(String key, DatabaseError error) {
+                if (mUserMarker.isVisible()) {
+                    mUserMarker.remove();
+                }
+
+                // add new marker
+                mUserMarker = mMap.addMarker(new MarkerOptions()
+                        .title("Pickup Here")
+                        .snippet("")
+                        .position(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+                );
+
+                mUserMarker.showInfoWindow();
+
+                btnPickupRequest.setText("Getting your DRIVER...");
+            }
+        });
     }
 
     private void setupLocation() {
@@ -158,26 +209,18 @@ public class HomeActivity extends AppCompatActivity
 
     private void displayLocation() {
         if (mLastLocation != null) {
-                geoFire.setLocation(FirebaseAuth.getInstance().getCurrentUser().getUid(),
-                        new GeoLocation(mLastLocation.getLatitude(), mLastLocation.getLongitude()), new GeoFire.CompletionListener() {
-                            @Override
-                            public void onComplete(String key, DatabaseError error) {
-                                if (mUserMarker != null) {
-                                    mUserMarker.remove();
-                                }
+            if (mUserMarker != null) {
+                mUserMarker.remove();
+            }
 
-                                mUserMarker = mMap.addMarker(new MarkerOptions()
-                                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_current_location))
-                                        .position(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()))
-                                        .title("Your Location"));
+            mUserMarker = mMap.addMarker(new MarkerOptions()
+                    .position(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()))
+                    .title("Your Location"));
 
-                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                                        new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()),
-                                        15.0f
-                                ));
-
-                            }
-                        });
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                    new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()),
+                    15.0f
+            ));
         }
     }
 
@@ -242,18 +285,9 @@ public class HomeActivity extends AppCompatActivity
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // add sample marker
-        googleMap.addMarker(
-                new MarkerOptions()
-                        .position(new LatLng(37.7750, -122.4183))
-                .title("San Francisco")
-        );
-
-        googleMap.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(
-                        new LatLng(37.7750, -122.4183), 15.0f
-                )
-        );
+        mMap.getUiSettings().setZoomControlsEnabled(true);
+        mMap.getUiSettings().setZoomGesturesEnabled(true);
+        mMap.setInfoWindowAdapter(new CustomInforWindow(this));
     }
 
     @Override
