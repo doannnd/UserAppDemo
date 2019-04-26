@@ -21,6 +21,7 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.nguyendinhdoan.userappdemo.common.Common;
 import com.nguyendinhdoan.userappdemo.model.User;
 
 import dmax.dialog.SpotsDialog;
@@ -56,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
         // init firebase auth
         auth = FirebaseAuth.getInstance();
         db = FirebaseDatabase.getInstance();
-        driversTable = db.getReference("usersTable");
+        driversTable = db.getReference(Common.user_rider_tbl);
 
         // initView
         rootLayout = findViewById(R.id.root_layout);

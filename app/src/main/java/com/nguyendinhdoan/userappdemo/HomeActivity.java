@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
+import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
@@ -21,9 +22,12 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.firebase.geofire.GeoFire;
 import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.GeoQuery;
+import com.firebase.geofire.GeoQueryEventListener;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -39,15 +43,19 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
+import com.nguyendinhdoan.userappdemo.common.Common;
 import com.nguyendinhdoan.userappdemo.helper.CustomInforWindow;
+import com.nguyendinhdoan.userappdemo.model.User;
 
 import java.util.List;
 
@@ -71,6 +79,13 @@ public class HomeActivity extends AppCompatActivity
     ImageView imgExpandable;
     private BottomSheetRiderFragment mBottomSheet;
     private Button btnPickupRequest;
+
+    private boolean isDriverFound = false;
+    String driverId = "";
+    int radius = 1; // 1km
+    int distance = 1; // 3km
+    private static final int LIMIT = 3;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,8 +111,6 @@ public class HomeActivity extends AppCompatActivity
         Places.initialize(this, getString(R.string.google_app_id));
 
         fusedLocationProviderClient = new FusedLocationProviderClient(this);
-        users = FirebaseDatabase.getInstance().getReference("usersLocation");
-        geoFire = new GeoFire(users);
 
         // init view
         imgExpandable = findViewById(R.id.imgExpandable);
@@ -121,7 +134,7 @@ public class HomeActivity extends AppCompatActivity
     }
 
     private void requestPickupHere(String uid) {
-        DatabaseReference dbRequest = FirebaseDatabase.getInstance().getReference("PickupRequest");
+        DatabaseReference dbRequest = FirebaseDatabase.getInstance().getReference(Common.pickup_request_tbl);
         GeoFire geoFire = new GeoFire(dbRequest);
 
         geoFire.setLocation(uid, new GeoLocation(mLastLocation.getLatitude(), mLastLocation.getLongitude()), new GeoFire.CompletionListener() {
@@ -142,6 +155,55 @@ public class HomeActivity extends AppCompatActivity
                 mUserMarker.showInfoWindow();
 
                 btnPickupRequest.setText("Getting your DRIVER...");
+
+                findDriver();
+            }
+        });
+    }
+
+    private void findDriver() {
+        DatabaseReference drivers = FirebaseDatabase.getInstance().getReference(Common.driver_tbl);
+        GeoFire driverGeoFire = new GeoFire(drivers);
+
+        GeoQuery geoQuery = driverGeoFire.queryAtLocation(new GeoLocation(
+                mLastLocation.getLatitude(), mLastLocation.getLongitude()
+        ), radius);
+
+        geoQuery.removeAllListeners();
+        geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+            @Override
+            public void onKeyEntered(String key, GeoLocation location) {
+                // if found
+                if (!isDriverFound) {
+                    isDriverFound = true;
+                    driverId = key;
+                    btnPickupRequest.setText("Call Driver");
+                    Toast.makeText(HomeActivity.this, ""+key, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onKeyExited(String key) {
+
+            }
+
+            @Override
+            public void onKeyMoved(String key, GeoLocation location) {
+
+            }
+
+            @Override
+            public void onGeoQueryReady() {
+                // if still not found driver, increase distance
+                if (!isDriverFound) {
+                    radius++;
+                    findDriver();
+                }
+            }
+
+            @Override
+            public void onGeoQueryError(DatabaseError error) {
+
             }
         });
     }
@@ -221,7 +283,78 @@ public class HomeActivity extends AppCompatActivity
                     new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()),
                     15.0f
             ));
+
+            loadAllAvailableDriver();
         }
+    }
+
+    private void loadAllAvailableDriver() {
+        // load all available Driver in distance 3km
+        DatabaseReference drivers = FirebaseDatabase.getInstance().getReference(Common.driver_tbl);
+        GeoFire driverGeoFire = new GeoFire(drivers);
+
+        GeoQuery geoQuery = driverGeoFire.queryAtLocation(new GeoLocation(
+                mLastLocation.getLatitude(), mLastLocation.getLongitude()
+        ), distance);
+
+        geoQuery.removeAllListeners();
+        geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+            @Override
+            public void onKeyEntered(String key, final GeoLocation location) {
+                // use key get email from table drivers;
+                // table driver is table when driver register account ad update information
+                // just open your driver to check this table name
+                FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl)
+                        .child(key)
+                        .addListenerForSingleValueEvent(new ValueEventListener() {
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                                // Because driver and user is sample properties
+                                // so we can use User model to get Driver class
+                                User user = dataSnapshot.getValue(User.class);
+
+                                // add driver to map
+                                mMap.addMarker(
+                                        new MarkerOptions()
+                                        .position(new LatLng(location.latitude, location.longitude))
+                                        .flat(true)
+                                        .title(user.getName())
+                                                .snippet("phone: " + user.getPhone())
+                                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.car))
+                                );
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                            }
+                        });
+            }
+
+            @Override
+            public void onKeyExited(String key) {
+
+            }
+
+            @Override
+            public void onKeyMoved(String key, GeoLocation location) {
+
+            }
+
+            @Override
+            public void onGeoQueryReady() {
+                if (distance <= LIMIT) { // distance just find for 3km
+                    distance++;
+                    loadAllAvailableDriver();
+                }
+            }
+
+            @Override
+            public void onGeoQueryError(DatabaseError error) {
+
+            }
+        });
+
     }
 
     @Override
