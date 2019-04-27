@@ -140,7 +140,7 @@ public class HomeActivity extends AppCompatActivity
             @Override
             public void onClick(View v) {
                 if (!isDriverFound) {
-                requestPickupHere(FirebaseAuth.getInstance().getCurrentUser().getUid());
+                    requestPickupHere(FirebaseAuth.getInstance().getCurrentUser().getUid());
 
                 } else {
                     sendRequestToDriver(driverId);
