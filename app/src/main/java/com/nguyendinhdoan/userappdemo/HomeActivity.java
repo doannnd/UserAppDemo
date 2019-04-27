@@ -6,8 +6,6 @@ import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
 import android.support.annotation.NonNull;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.view.View;
@@ -40,14 +38,17 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.libraries.places.api.Places;
-import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.iid.InstanceIdResult;
+import com.google.gson.Gson;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
@@ -55,9 +56,18 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 import com.nguyendinhdoan.userappdemo.common.Common;
 import com.nguyendinhdoan.userappdemo.helper.CustomInforWindow;
+import com.nguyendinhdoan.userappdemo.model.Notification;
+import com.nguyendinhdoan.userappdemo.model.Result;
+import com.nguyendinhdoan.userappdemo.model.Sender;
+import com.nguyendinhdoan.userappdemo.model.Token;
 import com.nguyendinhdoan.userappdemo.model.User;
+import com.nguyendinhdoan.userappdemo.remote.IFCMService;
 
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class HomeActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback {
@@ -86,6 +96,8 @@ public class HomeActivity extends AppCompatActivity
     int distance = 1; // 3km
     private static final int LIMIT = 3;
 
+    // send alert
+    IFCMService mServices;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +107,7 @@ public class HomeActivity extends AppCompatActivity
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
+        mServices = Common.getFCMService();
 
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         NavigationView navigationView = findViewById(R.id.nav_view);
@@ -126,11 +139,74 @@ public class HomeActivity extends AppCompatActivity
         btnPickupRequest.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!isDriverFound) {
                 requestPickupHere(FirebaseAuth.getInstance().getCurrentUser().getUid());
+
+                } else {
+                    sendRequestToDriver(driverId);
+                }
             }
         });
 
         setupLocation();
+
+        updateFirebaseToken();
+    }
+
+    private void updateFirebaseToken() {
+            FirebaseDatabase db = FirebaseDatabase.getInstance();
+            final DatabaseReference tokens = db.getReference(Common.token_tbl);
+
+            FirebaseInstanceId.getInstance().getInstanceId().addOnSuccessListener(new OnSuccessListener<InstanceIdResult>() {
+                @Override
+                public void onSuccess(InstanceIdResult instanceIdResult) {
+                    Token token = new Token(instanceIdResult.getToken());
+                    tokens.child(FirebaseAuth.getInstance().getCurrentUser().getUid()).setValue(token);
+                }
+            });
+
+    }
+
+    private void sendRequestToDriver(String driverId) {
+        DatabaseReference tokens = FirebaseDatabase.getInstance().getReference(Common.token_tbl);
+
+        tokens.orderByKey().equalTo(driverId)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                        for (DataSnapshot postSnapshot : dataSnapshot.getChildren()) {
+                            Token token = postSnapshot.getValue(Token.class); // get token object from database with key
+
+                            // make raw payload - convert latlng to json
+                            String json_lat_lng = new Gson().toJson(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()));
+
+                            Notification notification = new Notification("doannd", json_lat_lng); // we send to driver app and we will deserialize it again
+                            Sender content = new Sender(notification, token.getToken()); // send notification to token
+
+                            mServices.sendMessage(content)
+                                    .enqueue(new Callback<Result>() {
+                                        @Override
+                                        public void onResponse(Call<Result> call, Response<Result> response) {
+                                            if (response.isSuccessful()) {
+                                                Toast.makeText(HomeActivity.this, "Request sent", Toast.LENGTH_SHORT).show();
+                                            } else {
+                                                Toast.makeText(HomeActivity.this, "failed", Toast.LENGTH_SHORT).show();
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onFailure(Call<Result> call, Throwable t) {
+                                            Log.e(TAG, "ERROR: " + t.getMessage());
+                                        }
+                                    });
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                    }
+                });
     }
 
     private void requestPickupHere(String uid) {
