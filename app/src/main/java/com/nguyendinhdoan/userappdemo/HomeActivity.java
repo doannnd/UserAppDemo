@@ -183,8 +183,8 @@ public class HomeActivity extends AppCompatActivity
 
                             // make raw payload - convert latlng to json
                             String json_lat_lng = new Gson().toJson(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()));
-
-                            Notification notification = new Notification("doannd", json_lat_lng); // we send to driver app and we will deserialize it again
+                            String userIdToken = FirebaseAuth.getInstance().getCurrentUser().getUid();
+                            Notification notification = new Notification(userIdToken, json_lat_lng); // we send to driver app and we will deserialize it again
                             Sender content = new Sender(notification, token.getToken()); // send notification to token
 
                             mServices.sendMessage(content)
