@@ -99,6 +99,9 @@ public class HomeActivity extends AppCompatActivity
     // send alert
     IFCMService mServices;
 
+    // presense system
+    DatabaseReference driversAvailable;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -120,6 +123,7 @@ public class HomeActivity extends AppCompatActivity
         // maps
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
         // place
         Places.initialize(this, getString(R.string.google_app_id));
 
@@ -189,6 +193,7 @@ public class HomeActivity extends AppCompatActivity
                                         public void onResponse(Call<Result> call, Response<Result> response) {
                                             if (response.isSuccessful()) {
                                                 Toast.makeText(HomeActivity.this, "Request sent", Toast.LENGTH_SHORT).show();
+                                                Log.d(TAG, "onResponse: messagei id: " + response.body().toString());
                                             } else {
                                                 Toast.makeText(HomeActivity.this, "failed", Toast.LENGTH_SHORT).show();
                                             }
@@ -347,6 +352,22 @@ public class HomeActivity extends AppCompatActivity
 
     private void displayLocation() {
         if (mLastLocation != null) {
+
+            // presense system
+            driversAvailable = FirebaseDatabase.getInstance().getReference(Common.driver_tbl);
+            driversAvailable.addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    // if have any change from drivers, we will reload all driver
+                    loadAllAvailableDriver();
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+
             if (mUserMarker != null) {
                 mUserMarker.remove();
             }
@@ -365,6 +386,14 @@ public class HomeActivity extends AppCompatActivity
     }
 
     private void loadAllAvailableDriver() {
+
+        // first we need delete all marker on map ( include our location marker and available drivers marker )
+        mMap.clear();
+
+        // after that, just add our location again
+        mMap.addMarker(new MarkerOptions().position(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()))
+                .title("You"));
+
         // load all available Driver in distance 3km
         DatabaseReference drivers = FirebaseDatabase.getInstance().getReference(Common.driver_tbl);
         GeoFire driverGeoFire = new GeoFire(drivers);
